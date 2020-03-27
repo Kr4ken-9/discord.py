@@ -289,36 +289,45 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
             'd': {
                 'token': self.token,
                 'properties': {
-                    '$os': sys.platform,
-                    '$browser': 'discord.py',
-                    '$device': 'discord.py',
+                    '$os': 'Windows',
+                    '$browser': 'Firefox',
+                    '$device': '',
+                    '$browser_user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:73.0) Gecko/20100101 Firefox/73.0',
+                    '$browser_version': '73.0',
+                    '$os_version': '10',
                     '$referrer': '',
-                    '$referring_domain': ''
+                    '$referring_domain': '',
+                    '$referrer_current': '',
+                    '$referring_domain_current': '',
+                    '$release_channel': 'stable',
+                    '$client_build_number': '56718',
+                    '$client_event_source': None
                 },
-                'compress': True,
-                'large_threshold': 250,
-                'guild_subscriptions': self._connection.guild_subscriptions,
-                'v': 3
+                'presence': {  # Fuck it, we'll do it live
+                    'status': 'online',
+                    'since': 0,
+                    'activities': [],
+                    'afk': False
+                },
+                'compress': False,
             }
         }
 
-        if not self._connection.is_bot:
-            payload['d']['synced_guilds'] = []
+        # if not self._connection.is_bot:
+        #     payload['d']['synced_guilds'] = []
 
-        if self.shard_id is not None and self.shard_count is not None:
-            payload['d']['shard'] = [self.shard_id, self.shard_count]
-
-        state = self._connection
-        if state._activity is not None or state._status is not None:
-            payload['d']['presence'] = {
-                'status': state._status,
-                'game': state._activity,
-                'since': 0,
-                'afk': False
-            }
+        # state = self._connection
+        # if state._activity is not None or state._status is not None:
+        #     payload['d']['presence'] = {
+        #         'status': state._status,
+        #         'since': 0,
+        #         'activities': [],
+        #         'afk': False
+        #     }
 
         await self.send_as_json(payload)
         log.info('Shard ID %s has sent the IDENTIFY payload.', self.shard_id)
+        # log.info(payload)
 
     async def resume(self):
         """Sends the RESUME packet."""
