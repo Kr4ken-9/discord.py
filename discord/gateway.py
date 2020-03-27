@@ -289,19 +289,19 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
             'd': {
                 'token': self.token,
                 'properties': {
-                    '$os': 'Windows',
-                    '$browser': 'Firefox',
-                    '$device': '',
-                    '$browser_user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:73.0) Gecko/20100101 Firefox/73.0',
-                    '$browser_version': '73.0',
-                    '$os_version': '10',
-                    '$referrer': '',
-                    '$referring_domain': '',
-                    '$referrer_current': '',
-                    '$referring_domain_current': '',
-                    '$release_channel': 'stable',
-                    '$client_build_number': '56718',
-                    '$client_event_source': None
+                    'os': 'Windows',
+                    'browser': 'Firefox',
+                    'device': '',
+                    'browser_user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:73.0) Gecko/20100101 Firefox/73.0',
+                    'browser_version': '73.0',
+                    'os_version': '10',
+                    'referrer': '',
+                    'referring_domain': '',
+                    'referrer_current': '',
+                    'referring_domain_current': '',
+                    'release_channel': 'stable',
+                    'client_build_number': 56718,
+                    'client_event_source': None
                 },
                 'presence': {  # Fuck it, we'll do it live
                     'status': 'online',
