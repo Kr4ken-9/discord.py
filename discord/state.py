@@ -39,6 +39,7 @@ from .guild import Guild
 from .activity import BaseActivity
 from .user import User, ClientUser
 from .emoji import Emoji
+from .mentions import AllowedMentions
 from .partial_emoji import PartialEmoji
 from .message import Message
 from .relationship import Relationship
@@ -78,6 +79,12 @@ class ConnectionState:
         self._fetch_offline = options.get('fetch_offline_members', True)
         self.heartbeat_timeout = options.get('heartbeat_timeout', 60.0)
         self.guild_subscriptions = options.get('guild_subscriptions', True)
+        allowed_mentions = options.get('allowed_mentions')
+
+        if allowed_mentions is not None and not isinstance(allowed_mentions, AllowedMentions):
+            raise TypeError('allowed_mentions parameter must be AllowedMentions')
+
+        self.allowed_mentions = allowed_mentions
         # Only disable cache if both fetch_offline and guild_subscriptions are off.
         self._cache_members = (self._fetch_offline or self.guild_subscriptions)
         self._listeners = []
@@ -307,7 +314,9 @@ class ConnectionState:
             try:
                 await utils.sane_wait_for(chunks, timeout=len(chunks) * 30.0)
             except asyncio.TimeoutError:
-                log.info('Somehow timed out waiting for chunks.')
+                log.warning('Somehow timed out waiting for chunks.')
+            else:
+                log.info('Finished requesting guild member chunks for %d guilds.', len(guilds))
 
     async def query_members(self, guild, query, limit, cache):
         guild_id = guild.id
@@ -332,7 +341,7 @@ class ConnectionState:
 
             return members
         except asyncio.TimeoutError:
-            log.info('Timed out waiting for chunks with query %r and limit %d for guild_id %d', query, limit, guild_id)
+            log.warning('Timed out waiting for chunks with query %r and limit %d for guild_id %d', query, limit, guild_id)
             raise
 
     async def _delay_ready(self):
@@ -459,7 +468,7 @@ class ConnectionState:
     def parse_message_reaction_add(self, data):
         emoji = data['emoji']
         emoji_id = utils._get_as_snowflake(emoji, 'id')
-        emoji = PartialEmoji.with_state(self, animated=emoji.get('animated', False), id=emoji_id, name=emoji['name'])
+        emoji = PartialEmoji.with_state(self, id=emoji_id, animated=emoji.get('animated', False), name=emoji['name'])
         raw = RawReactionActionEvent(data, emoji, 'REACTION_ADD')
 
         member_data = data.get('member')
@@ -493,7 +502,7 @@ class ConnectionState:
     def parse_message_reaction_remove(self, data):
         emoji = data['emoji']
         emoji_id = utils._get_as_snowflake(emoji, 'id')
-        emoji = PartialEmoji.with_state(self, animated=emoji.get('animated', False), id=emoji_id, name=emoji['name'])
+        emoji = PartialEmoji.with_state(self, id=emoji_id, name=emoji['name'])
         raw = RawReactionActionEvent(data, emoji, 'REACTION_REMOVE')
         self.dispatch('raw_reaction_remove', raw)
 
@@ -512,7 +521,7 @@ class ConnectionState:
     def parse_message_reaction_remove_emoji(self, data):
         emoji = data['emoji']
         emoji_id = utils._get_as_snowflake(emoji, 'id')
-        emoji = PartialEmoji.with_state(self, animated=emoji.get('animated', False), id=emoji_id, name=emoji['name'])
+        emoji = PartialEmoji.with_state(self, id=emoji_id, name=emoji['name'])
         raw = RawReactionClearEmojiEvent(data, emoji)
         self.dispatch('raw_reaction_clear_emoji', raw)
 
@@ -877,7 +886,7 @@ class ConnectionState:
         guild_id = int(data['guild_id'])
         guild = self._get_guild(guild_id)
         members = [Member(guild=guild, data=member, state=self) for member in data.get('members', [])]
-        log.info('Processed a chunk for %s members in guild ID %s.', len(members), guild_id)
+        log.debug('Processed a chunk for %s members in guild ID %s.', len(members), guild_id)
         if self._cache_members:
             for member in members:
                 existing = guild.get_member(member.id)
@@ -1048,6 +1057,8 @@ class AutoShardedConnectionState(ConnectionState):
                 await utils.sane_wait_for(chunks, timeout=len(chunks) * 30.0)
             except asyncio.TimeoutError:
                 log.info('Somehow timed out waiting for chunks.')
+            else:
+                log.info('Finished requesting guild member chunks for %d guilds.', len(guilds))
 
     async def _delay_ready(self):
         launch = self._ready_state.launch

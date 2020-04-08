@@ -25,7 +25,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 import asyncio
-from collections import namedtuple
+from collections import namedtuple, deque
 import concurrent.futures
 import json
 import logging
@@ -132,15 +132,22 @@ class KeepAliveHandler(threading.Thread):
 class VoiceKeepAliveHandler(KeepAliveHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.recent_ack_latencies = deque(maxlen=20)
         self.msg = 'Keeping voice websocket alive with timestamp %s.'
         self.block_msg = 'Voice heartbeat blocked for more than %s seconds'
-        self.behind_msg = 'Can\'t keep up, voice websocket is %.1fs behind'
+        self.behind_msg = 'High socket latency, heartbeat is %.1fs behind'
 
     def get_payload(self):
         return {
             'op': self.ws.HEARTBEAT,
             'd': int(time.time() * 1000)
         }
+
+    def ack(self):
+        ack_time = time.perf_counter()
+        self._last_ack = ack_time
+        self.latency = ack_time - self._last_send
+        self.recent_ack_latencies.append(self.latency)
 
 class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
     """Implements a WebSocket for Discord's gateway v6.
@@ -238,7 +245,7 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
 
         client._connection._update_references(ws)
 
-        log.info('Created websocket connected to %s', gateway)
+        log.debug('Created websocket connected to %s', gateway)
 
         # poll event for OP Hello
         await ws.poll_event()
@@ -252,7 +259,7 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
             await ws.ensure_open()
         except websockets.exceptions.ConnectionClosed:
             # ws got closed so let's just do a regular IDENTIFY connect.
-            log.info('RESUME failed (the websocket decided to close) for Shard ID %s. Retrying.', shard_id)
+            log.warning('RESUME failed (the websocket decided to close) for Shard ID %s. Retrying.', shard_id)
             return await cls.from_client(client, shard_id=shard_id)
         else:
             return ws
@@ -375,7 +382,7 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
                 # "reconnect" can only be handled by the Client
                 # so we terminate our connection and raise an
                 # internal exception signalling to reconnect.
-                log.info('Received RECONNECT opcode.')
+                log.debug('Received RECONNECT opcode.')
                 await self.close()
                 raise ResumeWebSocket(self.shard_id)
 
@@ -552,7 +559,7 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
         log.debug('Updating our voice state to %s.', payload)
         await self.send_as_json(payload)
 
-    async def close(self, code=1000, reason=''):
+    async def close(self, code=4000, reason=''):
         if self._keep_alive:
             self._keep_alive.stop()
 
@@ -711,7 +718,7 @@ class DiscordVoiceWebSocket(websockets.client.WebSocketClientProtocol):
             await self.load_secret_key(data)
         elif op == self.HELLO:
             interval = data['heartbeat_interval'] / 1000.0
-            self._keep_alive = VoiceKeepAliveHandler(ws=self, interval=interval)
+            self._keep_alive = VoiceKeepAliveHandler(ws=self, interval=min(interval, 5.0))
             self._keep_alive.start()
 
     async def initial_connection(self, data):
@@ -743,6 +750,21 @@ class DiscordVoiceWebSocket(websockets.client.WebSocketClientProtocol):
         log.info('selected the voice protocol for use (%s)', mode)
 
         await self.client_connect()
+
+    @property
+    def latency(self):
+        """:class:`float`: Latency between a HEARTBEAT and its HEARTBEAT_ACK in seconds."""
+        heartbeat = self._keep_alive
+        return float('inf') if heartbeat is None else heartbeat.latency
+
+    @property
+    def average_latency(self):
+        """:class:`list`: Average of last 20 HEARTBEAT latencies."""
+        heartbeat = self._keep_alive
+        if heartbeat is None:
+            return float('inf')
+
+        return sum(heartbeat.recent_ack_latencies) / len(heartbeat.recent_ack_latencies)
 
     async def load_secret_key(self, data):
         log.info('received secret key for voice connection')
