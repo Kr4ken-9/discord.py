@@ -307,7 +307,7 @@ class DiscordWebSocket(websockets.client.WebSocketClientProtocol):
                     'referrer_current': '',
                     'referring_domain_current': '',
                     'release_channel': 'stable',
-                    'client_build_number': 56718,
+                    'client_build_number': 57401,
                     'client_event_source': None
                 },
                 'presence': {  # Fuck it, we'll do it live
