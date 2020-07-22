@@ -299,7 +299,7 @@ def _get_as_snowflake(data, key):
 def _get_mime_type_for_image(data):
     if data.startswith(b'\x89\x50\x4E\x47\x0D\x0A\x1A\x0A'):
         return 'image/png'
-    elif data[6:10] in (b'JFIF', b'Exif'):
+    elif data[0:3] == b'\xff\xd8\xff' or data[6:10] in (b'JFIF', b'Exif'):
         return 'image/jpeg'
     elif data.startswith((b'\x47\x49\x46\x38\x37\x61', b'\x47\x49\x46\x38\x39\x61')):
         return 'image/gif'
@@ -429,11 +429,11 @@ def _string_width(string, *, _IS_ASCII=_IS_ASCII):
 
 def resolve_invite(invite):
     """
-    Resolves an invite from a :class:`~discord.Invite`, URL or ID
+    Resolves an invite from a :class:`~discord.Invite`, URL or code.
 
     Parameters
     -----------
-    invite: Union[:class:`~discord.Invite`, :class:`~discord.Object`, :class:`str`]
+    invite: Union[:class:`~discord.Invite`, :class:`str`]
         The invite.
 
     Returns
@@ -452,6 +452,21 @@ def resolve_invite(invite):
     return invite
 
 def resolve_template(code):
+    """
+    Resolves a template code from a :class:`~discord.Template`, URL or code.
+
+    .. versionadded:: 1.4
+
+    Parameters
+    -----------
+    code: Union[:class:`~discord.Template`, :class:`str`]
+        The code.
+
+    Returns
+    --------
+    :class:`str`
+        The template code.
+    """
     from .template import Template # circular import
     if isinstance(code, Template):
         return template.code
